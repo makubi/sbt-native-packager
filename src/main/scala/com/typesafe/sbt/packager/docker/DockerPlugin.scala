@@ -75,6 +75,8 @@ object DockerPlugin extends AutoPlugin {
     dockerExposedVolumes := Seq(),
     dockerRepository := None,
     dockerUpdateLatest := false,
+    dockerTarget := dockerRepository.value.map(_ + "/").getOrElse("") + packageName.value + ":" + version.value,
+    dockerBuildCmd := Seq("docker", "build", "--force-rm", "-t", dockerTarget.value, "."),
     dockerEntrypoint := Seq("bin/%s" format executableScriptName.value),
     dockerCmd := Seq(),
     dockerCommands := {
@@ -105,9 +107,9 @@ object DockerPlugin extends AutoPlugin {
       mappings ++= Seq(dockerGenerateConfig.value) pair relativeTo(target.value),
       name := name.value,
       packageName := packageName.value,
-      publishLocal <<= (stage, dockerTarget, dockerUpdateLatest, streams) map {
-        (context, target, updateLatest, s) =>
-          publishLocalDocker(context, target, updateLatest, s.log)
+      publishLocal <<= (stage, dockerTarget, dockerBuildCmd, dockerUpdateLatest, streams) map {
+        (context, target, buildCmd, updateLatest, s) =>
+          publishLocalDocker(context, target, buildCmd, updateLatest, s.log)
       },
       publish <<= (publishLocal, dockerTarget, dockerUpdateLatest, streams) map {
         (_, target, updateLatest, s) =>
@@ -129,10 +131,7 @@ object DockerPlugin extends AutoPlugin {
       dockerPackageMappings <<= sourceDirectory map { dir =>
         MappingsHelper contentOf dir
       },
-      dockerGenerateConfig <<= (dockerCommands, target) map generateDockerConfig,
-      dockerTarget <<= (dockerRepository, packageName, version) map {
-        (repo, name, version) => repo.map(_ + "/").getOrElse("") + name + ":" + version
-      }
+      dockerGenerateConfig <<= (dockerCommands, target) map generateDockerConfig
     ))
 
   /**
@@ -285,9 +284,7 @@ object DockerPlugin extends AutoPlugin {
     }
   }
 
-  def publishLocalDocker(context: File, tag: String, latest: Boolean, log: Logger): Unit = {
-    val cmd = Seq("docker", "build", "--force-rm", "-t", tag, ".")
-
+  def publishLocalDocker(context: File, tag: String, cmd: Seq[String], latest: Boolean, log: Logger): Unit = {
     log.debug("Executing Native " + cmd.mkString(" "))
     log.debug("Working directory " + context.toString)
 
