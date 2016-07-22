@@ -75,6 +75,7 @@ object DockerPlugin extends AutoPlugin {
     dockerExposedVolumes := Seq(),
     dockerRepository := None,
     dockerUpdateLatest := false,
+    dockerLocalPublishWithSudo := false,
     dockerEntrypoint := Seq("bin/%s" format executableScriptName.value),
     dockerCmd := Seq(),
     dockerCommands := {
@@ -105,9 +106,9 @@ object DockerPlugin extends AutoPlugin {
       mappings ++= Seq(dockerGenerateConfig.value) pair relativeTo(target.value),
       name := name.value,
       packageName := packageName.value,
-      publishLocal <<= (stage, dockerTarget, dockerUpdateLatest, streams) map {
-        (context, target, updateLatest, s) =>
-          publishLocalDocker(context, target, updateLatest, s.log)
+      publishLocal <<= (stage, dockerTarget, dockerUpdateLatest, dockerLocalPublishWithSudo, streams) map {
+        (context, target, updateLatest, localPublishWithSudo, s) =>
+          publishLocalDocker(context, target, updateLatest, localPublishWithSudo, s.log)
       },
       publish <<= (publishLocal, dockerTarget, dockerUpdateLatest, streams) map {
         (_, target, updateLatest, s) =>
@@ -285,8 +286,14 @@ object DockerPlugin extends AutoPlugin {
     }
   }
 
-  def publishLocalDocker(context: File, tag: String, latest: Boolean, log: Logger): Unit = {
-    val cmd = Seq("docker", "build", "--force-rm", "-t", tag, ".")
+  def publishLocalDocker(context: File, tag: String, latest: Boolean, localPublishWithSudo: Boolean, log: Logger): Unit = {
+    val dockerCmd = Seq("docker", "build", "--force-rm", "-t", tag, ".")
+
+    val cmd =
+      if(localPublishWithSudo)
+        "sudo" +: dockerCmd
+      else
+        dockerCmd
 
     log.debug("Executing Native " + cmd.mkString(" "))
     log.debug("Working directory " + context.toString)
